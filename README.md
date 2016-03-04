@@ -24,6 +24,7 @@ Next, clean up your code and keep trying to commit until you succeed.
 Finally, show off your beautiful code to all your friends!
 
 If you need phpcs and phpmd, and use a mac, do:
+
 1. ensure homebrew is installed (see http://brew.sh/)
 2. $ brew install phpcs
 3. $ brew install phpmd
