@@ -1,17 +1,16 @@
 # phpsc
-php-style-checker
 phpsc is a php-style-checker
 
 phpcs is a wrapper that depends on phpcs and phpmd.
 It will run both tools on one or more files and exit 0 if your code is clean or non-zero otherwise.
 
-You can use phpcs as a standalone tool like:
-$ phpcs /path/to/file.php
+You can use phpcs as a standalone tool like:  
+$ phpcs /path/to/file.php  
 $ phpcs /path/to/directory/of/php/files
 
 In other words, give it a path and it will figure out what to do.
 
-Use -v to increase verbosity.
+Use -v to increase verbosity.  
 Use -s to be silent.
 
 Hook phpcs into your git repo to have it enforce clean code.
@@ -28,4 +27,3 @@ If you need phpcs and phpmd, and use a mac, do:
 1. ensure homebrew is installed (see http://brew.sh/)
 2. $ brew install phpcs
 3. $ brew install phpmd
-
