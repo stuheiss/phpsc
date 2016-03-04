@@ -1,0 +1,2 @@
+# phpsc
+php-style-checker
