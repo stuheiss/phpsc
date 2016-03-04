@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# Redirect output to stderr.
+exec 1>&2
+
+phpsc . && exit 0
+
+echo "Aborted; please fix your problems and retry your commit"
+exit 1

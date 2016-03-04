@@ -1,0 +1,116 @@
+#!/bin/sh
+# phpsc - php style check
+# Thu Mar  3 20:43:46 CST 2016 - stu
+
+phpcs_opts='--standard=psr2'
+phpmd_opts='text cleancode,codesize,controversial,design,naming,unusedcode'
+
+vflg=false # verbose
+sflg=false # silent
+
+phpcs_bin=
+phpmd_bin=
+
+function usage
+{
+    echo "usage: $0 { file | path }"
+    exit 1
+}
+
+# check one file using phpcs and phpmd
+function checkOne
+{
+    local f=$1
+    local ec=0
+    local rc=0
+
+    test -n "$phpcs_bin" && {
+        ${vflg:-false} && echo "# phpcs $phpcs_opts $f"
+        $phpcs_bin $phpcs_opts $f
+        rc=$?
+        ec=$((ec | rc))
+        ${vflg:-false} && echo "# phpcs returns $rc"
+    }
+
+    test -n "$phpmd_bin" && {
+        ${vflg:-false} && echo "# phpmd $f $phpmd_opts"
+        $phpmd_bin $f $phpmd_opts
+        rc=$?
+        ec=$((ec | rc))
+        ${vflg:-false} && echo "# phpmd returns $rc"
+    }
+
+    return $ec
+}
+
+# check one pathname which might be a directory that will be recursed
+function checkPath
+{
+    local f=$1
+    local ec=0
+    local rc=0
+    test -d $f && {
+        local i
+        for i in $f/*
+        do
+            # skip empty directories
+            test "$i" = "$f/*" && continue
+
+            # recurse
+            checkPath $i
+            rc=$?
+            ec=$((ec | rc))
+        done
+        return $ec
+    }
+    test -f $f || return 0
+
+    # only check files with ext '.php'
+    echo "$f" | grep '\.php$' >/dev/null || return 0
+
+    checkOne $f
+    ec=$?
+
+    if test $ec -eq 0
+    then
+        ${vflg:-false} && echo "# PHPSC: You wrote some beautiful code in $f"
+    else
+        ${vflg:-false} && echo "# PHPSC: You have room for improvement in $f"
+    fi
+    ${vflg:-false} && echo "# PHPSC: Score on $f is $ec"
+    return $ec
+}
+
+# main
+phpcs_bin=$(command -v phpcs)
+phpmd_bin=$(command -v phpmd)
+
+test -z "$phpcs_bin" -a -z "$phpmd_bin" && {
+    echo "$0: cant find phpcs or phpmd; aborting"
+    exit 1
+}
+ec=0
+while getopts 'sv' c
+do
+    case $c in
+    v) vflg=true;;
+    s) sflg=true;;
+    *) usage;;
+    esac
+done
+shift $((OPTIND - 1))
+test $# = 0 && usage
+for f
+do
+    checkPath $f
+    rc=$?
+    ec=$((ec | rc))
+done
+if test $ec -eq 0
+then
+    ${sflg:-false} || echo "# PHPSC: You wrote some beautiful code overall"
+else
+    ${sflg:-false} || echo "# PHPSC: You have room for improvement overall"
+fi
+${sflg:-false} || echo "# PHPSC: Score overall is $ec"
+exit $ec
