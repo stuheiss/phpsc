@@ -1,0 +1,129 @@
+#!/bin/bash
+# PHPMD pre-commit hook for git
+#
+# see the README
+
+# PHPMD Mandatory arguments:
+# 1) A php source code filename or directory. Can be a comma-separated string
+# 2) A report format
+# 3) A ruleset filename or a comma-separated string of rulesetfilenames
+
+# Available formats: xml, text, html.
+# Available rulesets: cleancode, codesize, controversial, design, naming, unusedcode.
+
+# Optional arguments that may be put after the mandatory arguments:
+# --minimumpriority: rule priority threshold; rules with lower priority than this will not be used
+# --reportfile: send report output to a file; default to STDOUT
+# --suffixes: comma-separated string of valid source code filename extensions
+# --exclude: comma-separated string of patterns that are used to ignore directories
+# --strict: also report those nodes with a @SuppressWarnings annotation
+
+exec 1>&2
+
+PHPMD=phpmd
+PHPMD_BIN=$(type -p $PHPMD)
+PHPMD_FORMAT=text
+PHPMD_RULESET='cleancode,codesize,controversial,design,naming,unusedcode'
+PHPMD_FILEPATTERN='*.php$'
+PHPMD_EXCLUDE=''
+PHPMD_MINIMUMPRIORITY=''
+#PHPCS_CODING_STANDARD=PEAR
+#PHPCS_IGNORE=
+TMP_STAGING=".tmp_staging"
+
+# parse config
+CONFIG_FILE=$(dirname $0)/config
+test -e $CONFIG_FILE && . $CONFIG_FILE
+
+# sanity checks
+test -x $PHPMD_BIN || {
+    echo "$PHPMD bin not found or executable"
+    exit 1
+}
+test -n $PHPMD_FORMAT || {
+    echo "PHPMD_FORMAT must be set"
+    exit 1
+}
+test -n $PHPMD_RULESET || {
+    echo "PHPMD_RULESET must be set"
+    exit 1
+}
+
+# stolen from template file
+if git rev-parse --verify HEAD
+then
+    against=HEAD
+else
+    # Initial commit: diff against an empty tree object
+    against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+# this is the magic: 
+# retrieve all files in staging area that are added, modified or renamed
+# but no deletions etc
+FILES=$(git diff-index --name-only --cached --diff-filter=ACMR $against -- )
+
+if [ "$FILES" == "" ]; then
+    exit 0
+fi
+
+# match files against whitelist
+FILES_TO_CHECK=""
+for FILE in $FILES
+do
+    echo "$FILE" | egrep -q "$PHPMD_FILE_PATTERN"
+    RETVAL=$?
+    if [ "$RETVAL" -eq "0" ]
+    then
+        FILES_TO_CHECK="$FILES_TO_CHECK $FILE"
+    fi
+done
+
+if [ "$FILES_TO_CHECK" == "" ]; then
+    exit 0
+fi
+
+# set options for phpmd
+if [ "$PHPMD_EXCLUDE" != "" ]; then
+    EXCLUDE="--exclude=$PHPMD_EXCLUDE"
+else
+    EXCLUDE=""
+fi
+
+if [ "$PHPMD_MINIMUMPRIORITY" != "" ]; then
+    MINIMUMPRIORITY="--minimumpriority=$PHPMD_MINIMUMPRIORITY"
+else
+    MINIMUMPRIORITY=""
+fi
+
+# Copy contents of staged version of files to temporary staging area
+# because we only want the staged version that will be commited and not
+# the version in the working directory
+STAGED_FILES=""
+sep=''
+# create temporary copy of staging area
+test -e $TMP_STAGING && rm -rf $TMP_STAGING
+trap 'rm -rf $TMP_STAGING; exit' 0 1 2 3 15
+mkdir $TMP_STAGING
+
+for FILE in $FILES_TO_CHECK
+do
+  ID=$(git diff-index --cached $against $FILE | cut -d " " -f4)
+
+  # create staged version of file in temporary staging area with the same
+  # path as the original file so that the phpcs ignore filters can be applied
+  mkdir -p "$TMP_STAGING/$(dirname $FILE)"
+  git cat-file blob $ID > "$TMP_STAGING/$FILE"
+  STAGED_FILES="${STAGED_FILES}${sep}${TMP_STAGING}/${FILE}"
+  sep=','
+done
+
+# run phpmd on files
+OUTPUT=$($PHPMD_BIN $STAGED_FILES $PHPMD_FORMAT $PHPMD_RULESET $MINIMUMPRIORITY $EXCLUDE)
+RETVAL=$?
+
+if [ $RETVAL -ne 0 ]; then
+    echo "$OUTPUT" | sed "s;/${TMP_STAGING}/;/;" | ${PAGER:-less}
+fi
+
+exit $RETVAL
