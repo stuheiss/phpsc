@@ -1,19 +1,32 @@
 #!/bin/sh
 # phpsc - php style check
-# Thu Mar  3 20:43:46 CST 2016 - stu
+# Sun Mar 13 17:53:38 CDT 2016
+
+VERSION=1.0.1
 
 phpcs_opts='--standard=psr2'
 phpmd_opts='text cleancode,codesize,controversial,design,naming,unusedcode'
+phpcpd_opts='-n'
 
 vflg=false # verbose
 sflg=false # silent
 
 phpcs_bin=
 phpmd_bin=
+phpcpd_bin=
+
+# use these checkers in this order
+style_checkers=(phpcs phpmd phpcpd)
+
+# abort furter checks on a given file if short_circuit_abort is true
+short_circuit_abort=true
 
 function usage
 {
-    echo "usage: $0 { file | path }"
+    echo "usage: $0 [-V] [-s] [-v] { file | path }"
+    echo " -V -- show version and exit"
+    echo " -v -- verbose"
+    echo " -s -- silent"
     exit 1
 }
 
@@ -24,21 +37,43 @@ function checkOne
     local ec=0
     local rc=0
 
-    test -n "$phpcs_bin" && {
-        ${vflg:-false} && echo "# phpcs $phpcs_opts $f"
-        $phpcs_bin $phpcs_opts $f
-        rc=$?
-        ec=$((ec | rc))
-        ${vflg:-false} && echo "# phpcs returns $rc"
-    }
-
-    test -n "$phpmd_bin" && {
-        ${vflg:-false} && echo "# phpmd $f $phpmd_opts"
-        $phpmd_bin $f $phpmd_opts
-        rc=$?
-        ec=$((ec | rc))
-        ${vflg:-false} && echo "# phpmd returns $rc"
-    }
+    n_checkers=${#style_checkers[@]}
+    for checker in $style_checkers; do
+        n_checkers=$((n_checkers - 1))
+        case $checker in
+            phpcs)
+                test -n "$phpcs_bin" && {
+                    ${vflg:-false} && echo "# phpcs $phpcs_opts $f"
+                    $phpcs_bin $phpcs_opts $f
+                    rc=$?
+                    ec=$((ec | rc))
+                    ${vflg:-false} && echo "# phpcs returns $rc"
+                }
+                ;;
+            phpmd)
+                test -n "$phpmd_bin" && {
+                    ${vflg:-false} && echo "# phpmd $f $phpmd_opts"
+                    $phpmd_bin $f $phpmd_opts
+                    rc=$?
+                    ec=$((ec | rc))
+                    ${vflg:-false} && echo "# phpmd returns $rc"
+                }
+                ;;
+            phpcpd)
+                test -n "$phpcpd_bin" && {
+                    ${vflg:-false} && echo "# phpcpd $phpcpd_opts $f"
+                    $phpcpd_bin $phpcpd_opts $f
+                    rc=$?
+                    ec=$((ec | rc))
+                    ${vflg:-false} && echo "# phpcpd returns $rc"
+                }
+                ;;
+        esac
+        ${short_circuit_abort:-false} && test $n_checkers != 0 && test $ec != 0 && {
+            ${vflg:-false} && echo "# short circuit return: $checker check $f failure"
+            return $ec
+        }
+    done
 
     return $ec
 }
@@ -84,15 +119,17 @@ function checkPath
 # main
 phpcs_bin=$(command -v phpcs)
 phpmd_bin=$(command -v phpmd)
+phpcpd_bin=$(command -v phpcpd)
 
 test -z "$phpcs_bin" -a -z "$phpmd_bin" && {
     echo "$0: cant find phpcs or phpmd; aborting"
     exit 1
 }
 ec=0
-while getopts 'sv' c
+while getopts 'svV' c
 do
     case $c in
+    V) echo "$0 version $VERSION"; exit 0;;
     v) vflg=true;;
     s) sflg=true;;
     *) usage;;
