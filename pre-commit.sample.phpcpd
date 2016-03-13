@@ -1,0 +1,143 @@
+#!/bin/bash
+# PHPCPD pre-commit hook for git
+#
+# see the README
+
+# phpcpd 2.0.0 by Sebastian Bergmann.
+
+# Usage:
+#  phpcpd [--names="..."] [--names-exclude="..."] [--exclude="..."] [--log-pmd="..."] [--min-lines="..."] [--min-tokens="..."] [--fuzzy] [--progress] [values1] ... [valuesN]
+
+# Arguments:
+#  values                
+
+# Options:
+#  --names               A comma-separated list of file names to check (default: ["*.php"])
+#  --names-exclude       A comma-separated list of file names to exclude
+#  --exclude             Exclude a directory from code analysis (multiple values allowed)
+#  --log-pmd             Write result in PMD-CPD XML format to file
+#  --min-lines           Minimum number of identical lines (default: 5)
+#  --min-tokens          Minimum number of identical tokens (default: 70)
+#  --fuzzy               Fuzz variable names
+#  --progress            Show progress bar
+#  --help (-h)           Display this help message.
+#  --quiet (-q)          Do not output any message.
+#  --verbose (-v|vv|vvv) Increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug
+#  --version (-V)        Display this application version.
+#  --ansi                Force ANSI output.
+#  --no-ansi             Disable ANSI output.
+#  --no-interaction (-n) Do not ask any interactive question.
+
+exec 1>&2
+DEBUG=false
+
+PHPCPD=phpcpd
+PHPCPD_BIN=$(type -p $PHPCPD)
+PHPCPD_MIN_LINES=''
+PHPCPD_MIN_TOKENS=''
+PHPCPD_NAMES=''
+PHPCPD_NAMES_EXCLUDE=''
+PHPCPD_FUZZY=''
+TMP_STAGING='.tmp_staging'
+
+# parse config
+CONFIG_FILE=$(dirname $0)/config
+test -e $CONFIG_FILE && . $CONFIG_FILE
+
+# sanity checks
+test -x $PHPCPD_BIN || {
+    echo "$PHPCPD bin not found or executable"
+    exit 1
+}
+
+# stolen from template file
+if git rev-parse --verify HEAD
+then
+    against=HEAD
+else
+    # Initial commit: diff against an empty tree object
+    against=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+fi
+
+# this is the magic: 
+# retrieve all files in staging area that are added, modified or renamed
+# but no deletions etc
+FILES=$(git diff-index --name-only --cached --diff-filter=ACMR $against -- )
+
+test -z "$FILES" && exit 0
+
+# match files against whitelist
+FILES_TO_CHECK=""
+for FILE in $FILES
+do
+    echo "$FILE" | egrep -q "$PHPCPD_FILE_PATTERN"
+    RETVAL=$?
+    if [ "$RETVAL" -eq "0" ]
+    then
+        FILES_TO_CHECK="$FILES_TO_CHECK $FILE"
+    fi
+done
+
+test -z "$FILES_TO_CHECK" && exit 0
+
+# set options for phpcpd
+if [ "$PHPCPD_NAMES" != "" ]; then
+    NAMES="--names=$PHPCPD_NAMES"
+else
+    NAMES=""
+fi
+
+if [ "$PHPCPD_NAMES_EXCLUDE" != "" ]; then
+    NAMES_EXCLUDE="--names-exclude=$PHPCPD_NAMES_EXCLUDE"
+else
+    NAMES_EXCLUDE=""
+fi
+
+if [ "$PHPCPD_MIN_LINES" != "" ]; then
+    MIN_LINES="--min-lines=$PHPCPD_MIN_LINES"
+else
+    MIN_LINES=""
+fi
+
+if [ "$PHPCPD_MIN_TOKENS" != "" ]; then
+    MIN_TOKENS="--min-tokens=$PHPCPD_MIN_TOKENS"
+else
+    MIN_TOKENS=""
+fi
+
+if [ "$PHPCPD_FUZZY" != "" ]; then
+    FUZZY="--fuzzy=$PHPCPD_FUZZY"
+else
+    FUZZY=""
+fi
+
+# Copy contents of staged version of files to temporary staging area
+# because we only want the staged version that will be commited and not
+# the version in the working directory
+STAGED_FILES=""
+# create temporary copy of staging area
+test -e $TMP_STAGING && rm -rf $TMP_STAGING
+trap 'rm -rf $TMP_STAGING; exit' 0 1 2 3 15
+mkdir $TMP_STAGING
+
+for FILE in $FILES_TO_CHECK
+do
+  ID=$(git diff-index --cached $against $FILE | cut -d " " -f4)
+
+  # create staged version of file in temporary staging area with the same
+  # path as the original file so that the phpcpd ignore filters can be applied
+  mkdir -p "$TMP_STAGING/$(dirname $FILE)"
+  git cat-file blob $ID > "$TMP_STAGING/$FILE"
+  STAGED_FILES="${STAGED_FILES} ${TMP_STAGING}/${FILE}"
+done
+
+# run phpcpd on files
+${DEBUG:-false} && echo "#dbg $PHPCPD_BIN -n $FUZZY $MIN_LINES $MIN_TOKENS $NAMES $NAMES_EXCLUDE $STAGED_FILES" >&2
+OUTPUT=$($PHPCPD_BIN -n $FUZZY $MIN_LINES $MIN_TOKENS $NAMES $NAMES_EXCLUDE $STAGED_FILES)
+RETVAL=$?
+
+if [ $RETVAL -ne 0 ]; then
+    echo "$OUTPUT" | sed "s;/${TMP_STAGING}/;/;" | ${PAGER:-cat}
+fi
+
+exit $RETVAL

@@ -6,10 +6,14 @@
 #
 # see the README
 
-PHPCS_BIN=/usr/bin/phpcs
-PHPCS_CODING_STANDARD=PEAR
-PHPCS_IGNORE=
-TMP_STAGING=".tmp_staging"
+exec 1>&2
+DEBUG=false
+
+PHPCS=phpcs
+PHPCS_BIN=$(type -p $PHPCS)
+PHPCS_CODING_STANDARD=psr2
+PHPCS_IGNORE=''
+TMP_STAGING='.tmp_staging'
 
 # parse config
 CONFIG_FILE=$(dirname $0)/config
@@ -19,7 +23,7 @@ fi
 
 # simple check if code sniffer is set up correctly
 if [ ! -x $PHPCS_BIN ]; then
-    echo "PHP CodeSniffer bin not found or executable -> $PHPCS_BIN"
+    echo "$PHPCS bin not found or executable"
     exit 1
 fi
 
@@ -37,9 +41,7 @@ fi
 # but no deletions etc
 FILES=$(git diff-index --name-only --cached --diff-filter=ACMR $against -- )
 
-if [ "$FILES" == "" ]; then
-    exit 0
-fi
+test -z "$FILES" && exit 0
 
 # create temporary copy of staging area
 if [ -e $TMP_STAGING ]; then
@@ -59,9 +61,7 @@ do
     fi
 done
 
-if [ "$FILES_TO_CHECK" == "" ]; then
-    exit 0
-fi
+test -z "$FILES_TO_CHECK" && exit 0
 
 # execute the code sniffer
 if [ "$PHPCS_IGNORE" != "" ]; then
@@ -103,6 +103,7 @@ do
   STAGED_FILES="$STAGED_FILES $TMP_STAGING/$FILE"
 done
 
+${DEBUG:-false} && echo "#dbg $PHPCS_BIN -s $IGNORE_WARNINGS --standard=$PHPCS_CODING_STANDARD $ENCODING $IGNORE $SNIFFS $STAGED_FILES" >&2
 OUTPUT=$($PHPCS_BIN -s $IGNORE_WARNINGS --standard=$PHPCS_CODING_STANDARD $ENCODING $IGNORE $SNIFFS $STAGED_FILES)
 RETVAL=$?
 
@@ -110,7 +111,7 @@ RETVAL=$?
 rm -rf $TMP_STAGING
 
 if [ $RETVAL -ne 0 ]; then
-    echo "$OUTPUT" | less
+    echo "$OUTPUT" | sed "s;/${TMP_STAGING}/;/;" | ${PAGER:-cat}
 fi
 
 exit $RETVAL

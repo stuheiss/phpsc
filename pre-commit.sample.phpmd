@@ -19,17 +19,15 @@
 # --strict: also report those nodes with a @SuppressWarnings annotation
 
 exec 1>&2
+DEBUG=false
 
 PHPMD=phpmd
 PHPMD_BIN=$(type -p $PHPMD)
-PHPMD_FORMAT=text
+PHPMD_FORMAT='text'
 PHPMD_RULESET='cleancode,codesize,controversial,design,naming,unusedcode'
-PHPMD_FILEPATTERN='*.php$'
 PHPMD_EXCLUDE=''
 PHPMD_MINIMUMPRIORITY=''
-#PHPCS_CODING_STANDARD=PEAR
-#PHPCS_IGNORE=
-TMP_STAGING=".tmp_staging"
+TMP_STAGING='.tmp_staging'
 
 # parse config
 CONFIG_FILE=$(dirname $0)/config
@@ -40,11 +38,11 @@ test -x $PHPMD_BIN || {
     echo "$PHPMD bin not found or executable"
     exit 1
 }
-test -n $PHPMD_FORMAT || {
+test -n "$PHPMD_FORMAT" || {
     echo "PHPMD_FORMAT must be set"
     exit 1
 }
-test -n $PHPMD_RULESET || {
+test -n "$PHPMD_RULESET" || {
     echo "PHPMD_RULESET must be set"
     exit 1
 }
@@ -63,9 +61,7 @@ fi
 # but no deletions etc
 FILES=$(git diff-index --name-only --cached --diff-filter=ACMR $against -- )
 
-if [ "$FILES" == "" ]; then
-    exit 0
-fi
+test -z "$FILES" && exit 0
 
 # match files against whitelist
 FILES_TO_CHECK=""
@@ -79,9 +75,7 @@ do
     fi
 done
 
-if [ "$FILES_TO_CHECK" == "" ]; then
-    exit 0
-fi
+test -z "$FILES_TO_CHECK" && exit 0
 
 # set options for phpmd
 if [ "$PHPMD_EXCLUDE" != "" ]; then
@@ -100,7 +94,6 @@ fi
 # because we only want the staged version that will be commited and not
 # the version in the working directory
 STAGED_FILES=""
-sep=''
 # create temporary copy of staging area
 test -e $TMP_STAGING && rm -rf $TMP_STAGING
 trap 'rm -rf $TMP_STAGING; exit' 0 1 2 3 15
@@ -111,19 +104,21 @@ do
   ID=$(git diff-index --cached $against $FILE | cut -d " " -f4)
 
   # create staged version of file in temporary staging area with the same
-  # path as the original file so that the phpcs ignore filters can be applied
+  # path as the original file so that the phpmd ignore filters can be applied
   mkdir -p "$TMP_STAGING/$(dirname $FILE)"
   git cat-file blob $ID > "$TMP_STAGING/$FILE"
-  STAGED_FILES="${STAGED_FILES}${sep}${TMP_STAGING}/${FILE}"
-  sep=','
+  STAGED_FILES="${STAGED_FILES} ${TMP_STAGING}/${FILE}"
 done
 
+STAGED_FILES=$(echo $STAGED_FILES | sed -e 's/^ *//' -e 's/ /,/g')
+
 # run phpmd on files
+${DEBUG:-false} && echo "#dbg $PHPMD_BIN $STAGED_FILES $PHPMD_FORMAT $PHPMD_RULESET $MINIMUMPRIORITY $EXCLUDE" >&2
 OUTPUT=$($PHPMD_BIN $STAGED_FILES $PHPMD_FORMAT $PHPMD_RULESET $MINIMUMPRIORITY $EXCLUDE)
 RETVAL=$?
 
 if [ $RETVAL -ne 0 ]; then
-    echo "$OUTPUT" | sed "s;/${TMP_STAGING}/;/;" | ${PAGER:-less}
+    echo "$OUTPUT" | sed "s;/${TMP_STAGING}/;/;" | ${PAGER:-cat}
 fi
 
 exit $RETVAL
