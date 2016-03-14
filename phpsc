@@ -38,7 +38,7 @@ function checkOne
     local rc=0
 
     n_checkers=${#style_checkers[@]}
-    for checker in $style_checkers; do
+    for checker in ${style_checkers[@]}; do
         n_checkers=$((n_checkers - 1))
         case $checker in
             phpcs)
