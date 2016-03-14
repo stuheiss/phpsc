@@ -26,6 +26,13 @@ function usage
     echo " -V -- show version and exit"
     echo " -v -- verbose"
     echo " -s -- silent"
+    echo
+    echo "The following variables and their defaults can be overridden by the environment:"
+    for v in PHPSC_PHPCS_OPTS PHPSC_PHPMD_OPTS PHPSC_PHPCPD_OPTS PHPSC_SHORT_CIRCUIT_ABORT; do
+        eval echo "$v=\\\"\$$v\\\""
+    done
+    echo
+    echo "Example: PHPSC_PHPCS_OPTS='--standard=zend' PHPSC_SHORT_CIRCUIT_ABORT='false' $0 filespec"
     exit 1
 }
 
