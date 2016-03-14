@@ -4,9 +4,11 @@
 
 VERSION=1.0.1
 
-phpcs_opts='--standard=psr2'
-phpmd_opts='text cleancode,codesize,controversial,design,naming,unusedcode'
-phpcpd_opts='-n'
+# defaults can be overridden by environment variables
+: ${PHPSC_PHPCS_OPTS:='--standard=psr2'} # phpcs defaults
+: ${PHPSC_PHPMD_OPTS:='text cleancode,codesize,controversial,design,naming,unusedcode'} # phpmd defaults
+: ${PHPSC_PHPCPD_OPTS:='-n'} # phpcpd defaults
+: ${PHPSC_SHORT_CIRCUIT_ABORT:=true} # abort further checks after first failure
 
 vflg=false # verbose
 sflg=false # silent
@@ -17,9 +19,6 @@ phpcpd_bin=
 
 # use these checkers in this order
 style_checkers=(phpcs phpmd phpcpd)
-
-# abort furter checks on a given file if short_circuit_abort is true
-short_circuit_abort=true
 
 function usage
 {
@@ -43,8 +42,8 @@ function checkOne
         case $checker in
             phpcs)
                 test -n "$phpcs_bin" && {
-                    ${vflg:-false} && echo "# phpcs $phpcs_opts $f"
-                    $phpcs_bin $phpcs_opts $f
+                    ${vflg:-false} && echo "# phpcs $PHPSC_PHPCS_OPTS $f"
+                    $phpcs_bin $PHPSC_PHPCS_OPTS $f
                     rc=$?
                     ec=$((ec | rc))
                     ${vflg:-false} && echo "# phpcs returns $rc"
@@ -52,8 +51,8 @@ function checkOne
                 ;;
             phpmd)
                 test -n "$phpmd_bin" && {
-                    ${vflg:-false} && echo "# phpmd $f $phpmd_opts"
-                    $phpmd_bin $f $phpmd_opts
+                    ${vflg:-false} && echo "# phpmd $f $PHPSC_PHPMD_OPTS"
+                    $phpmd_bin $f $PHPSC_PHPMD_OPTS
                     rc=$?
                     ec=$((ec | rc))
                     ${vflg:-false} && echo "# phpmd returns $rc"
@@ -61,15 +60,15 @@ function checkOne
                 ;;
             phpcpd)
                 test -n "$phpcpd_bin" && {
-                    ${vflg:-false} && echo "# phpcpd $phpcpd_opts $f"
-                    $phpcpd_bin $phpcpd_opts $f
+                    ${vflg:-false} && echo "# phpcpd $PHPSC_PHPCPD_OPTS $f"
+                    $phpcpd_bin $PHPSC_PHPCPD_OPTS $f
                     rc=$?
                     ec=$((ec | rc))
                     ${vflg:-false} && echo "# phpcpd returns $rc"
                 }
                 ;;
         esac
-        ${short_circuit_abort:-false} && test $n_checkers != 0 && test $ec != 0 && {
+        ${PHPSC_SHORT_CIRCUIT_ABORT:-false} && test $n_checkers != 0 && test $ec != 0 && {
             ${vflg:-false} && echo "# short circuit return: $checker check $f failure"
             return $ec
         }
