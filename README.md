@@ -13,7 +13,9 @@ In other words, give it a path and it will figure out what to do.
 Use -v to increase verbosity.  
 Use -s to be silent.
 
-Hook into your git repo to have it enforce clean code. Note: pre-commit.sample.style_checkers has all logic built-in and does not use phpsc.
+Default options for each tool can be overridded by the environment. Run phpsc with no arguments for example usage.
+
+Hook into your git repo to have phpsc enforce clean code. Note: pre-commit.sample.style_checkers has all logic built-in and does not use stand-alone cli phpsc.
 
 1. copy pre-commit.sample.style_checkers to .git/hooks/pre-commit and chmod to 755
 2. make sure you have phpcs, phpmd, and phpcpd installed
